@@ -5,7 +5,7 @@ description: Use when user uploads a table file (Excel, CSV, etc.) and asks to a
 
 # 表格数据分析
 
-**版本：0.0.2**
+**版本：0.0.3**
 
 ## Overview
 
@@ -239,6 +239,7 @@ digraph table_analysis_flow {
 | **数据计算** | 计算新列、汇总统计 | 计算增长率、分组汇总 |
 | **数据筛选** | 按条件筛选 | 筛选特定时间段、地区 |
 | **数据合并** | 合并多个表格（如有） | 关联多个sheet |
+| **数据透视** | 透视表、逆透视、交叉分析 | 行列维度转换、多维度聚合 |
 
 ### 4.3 无法处理的情况
 
@@ -249,6 +250,136 @@ digraph table_analysis_flow {
 | 用户要求但无法做到 | 说明原因，提供替代方案 |
 | 模型预计需要但无法处理 | 说明为什么需要、为什么无法处理 |
 | 数据质量问题导致无法处理 | 说明问题所在、建议解决方案 |
+
+### 4.4 数据透视操作
+
+**适用场景**：需要改变数据布局、进行多维度聚合分析时
+
+| 操作类型 | 说明 | 典型场景 |
+|---------|------|---------|
+| **透视表** | 将长表转为宽表，按维度聚合 | 按地区×月份统计销售额 |
+| **逆透视** | 将宽表转为长表 | 将月份列转为行数据 |
+| **交叉表** | 统计两个维度的交叉频次 | 地区×产品类型的订单数 |
+| **堆叠/解堆** | 层级索引转换 | 多级索引的展开与折叠 |
+
+#### Python 示例代码
+
+```python
+import pandas as pd
+
+# ========== 1. 透视表 pivot_table ==========
+# 场景：按地区、月份统计销售额总和
+pivot_df = pd.pivot_table(
+    df,
+    values='销售额',           # 聚合值列
+    index='地区',              # 行维度
+    columns='月份',            # 列维度
+    aggfunc='sum',             # 聚合函数：sum/mean/count/max/min
+    fill_value=0,              # 空值填充
+    margins=True               # 显示合计行/列
+)
+
+# 多值聚合示例
+pivot_multi = pd.pivot_table(
+    df,
+    values=['销售额', '订单数'],
+    index='地区',
+    columns='月份',
+    aggfunc={'销售额': 'sum', '订单数': 'count'}
+)
+
+# ========== 2. 逆透视 melt（宽表转长表） ==========
+# 场景：将多个月份列转为行数据
+melt_df = pd.melt(
+    df,
+    id_vars=['地区', '产品'],      # 保留的标识列
+    value_vars=['1月', '2月', '3月'],  # 需要逆透视的列
+    var_name='月份',               # 原列名转为新列的名称
+    value_name='销售额'            # 原值转为新列的名称
+)
+
+# 所有列除 id_vars 外都逆透视
+melt_all = pd.melt(
+    df,
+    id_vars=['地区'],
+    var_name='属性',
+    value_name='值'
+)
+
+# ========== 3. 交叉表 crosstab ==========
+# 场景：统计地区×产品类型的订单频次
+cross_df = pd.crosstab(
+    df['地区'],
+    df['产品类型'],
+    margins=True,              # 显示合计
+    normalize='index'          # 按行归一化（占比）
+)
+
+# 带聚合值的交叉表
+cross_agg = pd.crosstab(
+    df['地区'],
+    df['产品类型'],
+    values=df['销售额'],
+    aggfunc='sum'
+)
+
+# ========== 4. 堆叠/解堆 stack/unstack ==========
+# 场景：层级索引的转换
+# unstack：将内层索引转为列
+unstack_df = df.groupby(['地区', '月份'])['销售额'].sum().unstack()
+
+# stack：将列转为内层索引
+stack_df = unstack_df.stack()
+
+# ========== 5. 转置 transpose ==========
+# 场景：行列互换
+transpose_df = df.T
+# 或
+transpose_df = df.transpose()
+```
+
+#### 使用场景示例
+
+**场景1**：用户上传销售明细表，想看"各地区各月份的销售额汇总"
+```python
+# 原始数据：订单ID、地区、月份、销售额
+# 期望输出：地区为行、月份为列的汇总表
+
+result = pd.pivot_table(
+    df,
+    values='销售额',
+    index='地区',
+    columns='月份',
+    aggfunc='sum',
+    margins=True
+)
+```
+
+**场景2**：用户上传宽表（各地区各月份销售额分列），想转为长表分析
+```python
+# 原始数据：地区、1月销售额、2月销售额、3月销售额...
+# 期望输出：地区、月份、销售额
+
+result = pd.melt(
+    df,
+    id_vars=['地区'],
+    value_vars=[col for col in df.columns if '月' in col],
+    var_name='月份',
+    value_name='销售额'
+)
+```
+
+**场景3**：用户想看"各地区各产品类型的订单数分布"
+```python
+# 原始数据：订单ID、地区、产品类型、销售额
+# 期望输出：地区×产品类型的订单数矩阵
+
+result = pd.crosstab(
+    df['地区'],
+    df['产品类型'],
+    margins=True
+)
+```
 
 ---
 
@@ -542,3 +673,4 @@ digraph table_analysis_flow {
 |-----|------|---------|
 | 0.0.1 | 2026-03-30 | 初始版本 |
 | 0.0.2 | 2026-03-30 | **输出结构优化**：参考 intelligent-data-analysis 改写输出格式，增加完整输出示例 |
+| 0.0.3 | 2026-03-31 | **新增数据透视能力**：①新增"数据透视"处理类型 ②新增 4.4 数据透视操作小节 ③包含 pivot_table、melt、crosstab、stack/unstack、transpose 的 Python 示例代码 ④新增 3 个典型使用场景示例 |
