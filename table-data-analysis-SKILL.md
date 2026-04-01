@@ -5,19 +5,20 @@ description: Use when user uploads a table file (Excel, CSV, etc.) and asks to a
 
 # 表格数据分析
 
-**版本：0.0.3**
+**版本：0.0.4**
 
 ## Overview
 
-**核心原则**：理解问题 → 探索数据 → 处理数据 → 执行分析 → 结构化输出
+**核心原则**：理解问题 → 查询知识 → 探索数据 → 处理数据 → 执行分析 → 结构化输出
 
 这个 skill 帮助你分析用户上传的表格数据：
 1. **理解用户意图**：明确型（具体指令）和模糊型（探索性分析）两种场景
 2. **查询企业知识**：优先查询企业知识库，获取分析方法或处理逻辑
 3. **自主探索数据**：同时查看数据结构和列名，推断分析方向
-4. **灵活处理数据**：只要模型支持的处理都可执行，服务于用户意图
-5. **全面分析**：即使用户表达明确，也补充其他有价值的分析
-6. **透明输出**：说明做了什么、为什么没做某些处理
+4. **灵活处理数据**：支持 Python 处理和 SQL 查询两种方式，服务于用户意图
+5. **多文件支持**：支持多 Sheet、多文件关联分析
+6. **全面分析**：即使用户表达明确，也补充其他有价值的分析
+7. **透明输出**：说明做了什么、为什么没做某些处理
 
 ## 完整分析流程
 
@@ -54,9 +55,9 @@ digraph table_analysis_flow {
 
     subgraph cluster_3 {
         label="第四步：处理数据";
-        check_confirm [label="工程是否支持追问？" shape=diamond];
-        confirm [label="确认分析方向\n（向用户确认）" shape=box];
-        direct_process [label="直接处理" shape=box];
+        check_method [label="选择处理方式" shape=diamond];
+        python_method [label="Python处理\n（pandas透视/转换）" shape=box];
+        sql_method [label="SQL查询\n（复杂聚合/多表关联）" shape=box];
         process_data [label="数据处理\n（清洗、转换、计算）" shape=box];
     }
 
@@ -69,6 +70,7 @@ digraph table_analysis_flow {
     subgraph cluster_5 {
         label="第六步：结构化输出";
         output [label="输出结果\n（做了什么、没做什么、原因）" shape=box];
+        cache [label="缓存结果\n（可选）" shape=box];
     }
 
     start -> check_intent;
@@ -89,15 +91,16 @@ digraph table_analysis_flow {
     explore_columns -> explore_stats;
     explore_stats -> merge_explore;
 
-    merge_explore -> check_confirm;
-    check_confirm -> confirm [label="支持追问"];
-    check_confirm -> direct_process [label="不支持"];
-    confirm -> process_data;
-    direct_process -> process_data;
+    merge_explore -> check_method;
+    check_method -> python_method [label="简单处理"];
+    check_method -> sql_method [label="复杂查询/多文件"];
+    python_method -> process_data;
+    sql_method -> process_data;
 
     process_data -> select_methods;
     select_methods -> execute;
     execute -> output;
+    output -> cache [label="需要复用"];
 }
 ```
 
@@ -218,17 +221,73 @@ digraph table_analysis_flow {
 
 ## 第四步：处理数据
 
-### 4.1 确认环节（可选）
+### 4.1 处理方式选择
 
-**条件**：如果工程支持追问
+| 场景 | 推荐方式 | 说明 |
+|-----|---------|------|
+| 简单统计/透视 | Python (pandas) | 快速、灵活 |
+| 复杂聚合查询 | SQL (DuckDB) | 表达力强 |
+| 多文件关联 | SQL (DuckDB) | 支持 JOIN |
+| 大文件(>100MB) | SQL (DuckDB) | 列式存储高效 |
 
-| 场景 | 动作 |
-|-----|------|
-| 模糊型 + 工程支持追问 | 向用户确认分析方向 |
-| 模糊型 + 工程不支持追问 | 直接执行，输出中说明判断依据 |
-| 明确型 | 按用户意图执行，补充其他分析 |
+### 4.2 SQL 查询支持
 
-### 4.2 数据处理范围
+**适用场景**：复杂聚合、多表关联、大文件处理
+
+**调用方式**：
+```bash
+python /mnt/skills/public/table-data-analysis/scripts/query.py \
+  --files /mnt/user-data/uploads/data.xlsx \
+  --sql "SELECT region, SUM(sales) as total FROM Sheet1 GROUP BY region ORDER BY total DESC"
+```
+
+**常用 SQL 模式**：
+
+| 场景 | SQL 示例 |
+|-----|---------|
+| 分组统计 | `SELECT category, SUM(amount), COUNT(*) FROM data GROUP BY category` |
+| 时间趋势 | `SELECT DATE_TRUNC('month', date), SUM(sales) FROM data GROUP BY 1` |
+| 筛选Top N | `SELECT * FROM data ORDER BY amount DESC LIMIT 10` |
+| 条件聚合 | `SELECT region, SUM(CASE WHEN type='A' THEN 1 END) as type_a FROM data GROUP BY region` |
+| 窗口函数 | `SELECT *, ROW_NUMBER() OVER (PARTITION BY region ORDER BY sales DESC) as rank FROM data` |
+
+### 4.3 多文件处理
+
+**场景**：多个 Excel Sheet、多个文件关联分析
+
+**调用方式**：
+```bash
+# 多文件 JOIN
+python /mnt/skills/public/table-data-analysis/scripts/query.py \
+  --files /mnt/user-data/uploads/orders.xlsx /mnt/user-data/uploads/customers.xlsx \
+  --sql "SELECT o.order_id, c.customer_name, o.amount 
+         FROM orders o 
+         JOIN customers c ON o.customer_id = c.id 
+         WHERE o.amount > 1000"
+```
+
+**表命名规则**：
+- Excel: Sheet名作为表名（如 `Sheet1`, `Orders`）
+- CSV: 文件名（不含扩展名）作为表名
+- 特殊字符: 空格自动转下划线，数字开头用双引号
+
+### 4.4 缓存机制
+
+**缓存目录**：
+```
+/mnt/user-data/workspace/.analysis-cache/
+└── session_{timestamp}/
+    ├── query_01.json      # 查询结果
+    ├── summary.json       # 统计摘要
+    └── manifest.json      # 文件清单
+```
+
+**缓存原则**：
+- 按需缓存：只缓存聚合结果，不缓存原始数据
+- 及时清理：分析完成后清理临时文件
+- 可追溯：缓存文件命名清晰
+
+### 4.5 数据处理范围
 
 **原则**：只要模型支持的处理都可执行，服务于用户意图和分析意图
 
@@ -241,7 +300,7 @@ digraph table_analysis_flow {
 | **数据合并** | 合并多个表格（如有） | 关联多个sheet |
 | **数据透视** | 透视表、逆透视、交叉分析 | 行列维度转换、多维度聚合 |
 
-### 4.3 无法处理的情况
+### 4.7 无法处理的情况
 
 **当无法执行某些处理时，在输出中说明**：
 
@@ -251,7 +310,7 @@ digraph table_analysis_flow {
 | 模型预计需要但无法处理 | 说明为什么需要、为什么无法处理 |
 | 数据质量问题导致无法处理 | 说明问题所在、建议解决方案 |
 
-### 4.4 数据透视操作
+### 4.6 数据透视操作
 
 **适用场景**：需要改变数据布局、进行多维度聚合分析时
 
@@ -674,3 +733,4 @@ result = pd.crosstab(
 | 0.0.1 | 2026-03-30 | 初始版本 |
 | 0.0.2 | 2026-03-30 | **输出结构优化**：参考 intelligent-data-analysis 改写输出格式，增加完整输出示例 |
 | 0.0.3 | 2026-03-31 | **新增数据透视能力**：①新增"数据透视"处理类型 ②新增 4.4 数据透视操作小节 ③包含 pivot_table、melt、crosstab、stack/unstack、transpose 的 Python 示例代码 ④新增 3 个典型使用场景示例 |
+| 0.0.4 | 2026-04-01 | **新增 SQL 和多文件支持**：①新增 SQL 查询能力（DuckDB）②新增多文件 JOIN 支持 ③新增缓存机制 ④优化处理流程（Python/SQL 双模式）⑤更新流程图 |
