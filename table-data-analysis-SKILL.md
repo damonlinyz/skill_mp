@@ -739,3 +739,4 @@ result = pd.crosstab(
 | 0.0.2 | 2026-03-30 | **输出结构优化**：参考 intelligent-data-analysis 改写输出格式，增加完整输出示例 |
 | 0.0.3 | 2026-03-31 | **新增数据透视能力**：①新增"数据透视"处理类型 ②新增 4.4 数据透视操作小节 ③包含 pivot_table、melt、crosstab、stack/unstack、transpose 的 Python 示例代码 ④新增 3 个典型使用场景示例 |
 | 0.0.4 | 2026-04-01 | **新增 SQL 和多文件支持**：①新增 SQL 查询能力（DuckDB）②新增多文件 JOIN 支持 ③新增缓存机制 ④优化处理流程（Python/SQL 双模式）⑤更新流程图 |
+| 0.0.5 | 2026-04-02 | **优化触发条件**：①description改为中文 ②新增TRIGGER when明确触发场景 ③新增DO NOT TRIGGER when区分intelligent-data-analysis场景 ④合并原When to Use内容 |
