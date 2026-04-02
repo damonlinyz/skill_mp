@@ -1,11 +1,24 @@
 ---
 name: table-data-analysis
-description: Use when user uploads a table file (Excel, CSV, etc.) and asks to analyze the data. Handles both explicit requests (specific calculations, transformations) and exploratory analysis (vague requests like "analyze this data"). Covers data exploration, data processing, and structured analysis output.
+description: 用于用户上传表格文件（Excel、CSV等）并要求分析数据时。支持明确型请求（具体计算、转换）和探索性分析（如"帮我分析这个数据"等模糊请求）。涵盖数据探索、数据处理和结构化分析输出。
 ---
 
 # 表格数据分析
 
-**版本：0.0.4**
+**版本：0.0.5**
+
+## TRIGGER when
+
+- 用户上传了 Excel/CSV/表格文件并要求分析
+- 用户说/问"帮我分析这个表格/数据"（且用户上传了文件）
+- 用户说/问"看看这个表格有什么问题"
+- 用户说/问"帮我算一下X列的均值/汇总"
+- 用户说/问"把Y列按Z分组统计"
+- 需要对表格数据进行探索、清洗、分析
+
+## DO NOT TRIGGER when
+
+- 用户没有上传文件，而是在问指标平台上的数据分析 → 用 intelligent-data-analysis
 
 ## Overview
 
@@ -103,14 +116,6 @@ digraph table_analysis_flow {
     output -> cache [label="需要复用"];
 }
 ```
-
-## When to Use
-
-- 用户上传 Excel/CSV 文件并问"帮我分析这个数据"
-- 用户问"看看这个表格有什么问题"
-- 用户问"帮我算一下X列的均值/汇总"
-- 用户问"把Y列按Z分组统计"
-- 需要对表格数据进行探索、清洗、分析
 
 ---
 

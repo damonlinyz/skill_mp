@@ -1,11 +1,23 @@
 ---
 name: intelligent-data-analysis
-description: Use when user asks to analyze metrics/data and needs to identify purpose, select analysis methods, determine information requirements, and produce structured analysis results. Use for metric attribution, dimension analysis, contribution calculation, trend comparison, root cause analysis on intelligent query platforms.
+description: 用于用户需要分析指标/数据时，帮助识别分析目的、选择分析方法、确定信息需求并输出结构化分析结果。适用于指标归因、维度分析、贡献计算、趋势对比、根因分析等智能问数平台场景。
 ---
 
 # 智能数据分析
 
-**版本：0.0.4**
+**版本：0.0.5**
+
+## TRIGGER when
+
+- 用户说/问"帮我分析 XXX"
+- 用户说/问"看看 XXX 增加的原因"
+- 用户说/问"为什么 XXX 变化了"
+- 用户说/问"XXX 的影响因素是什么"
+- 需要对指标进行归因、拆解、对比分析
+
+## DO NOT TRIGGER when
+
+- 用户上传了 Excel/CSV 等表格文件要求分析 → 用 table-data-analysis
 
 ## Overview
 
@@ -97,14 +109,6 @@ digraph analysis_flow_v2 {
     drill -> output;
 }
 ```
-
-## When to Use
-
-- 用户问"帮我分析 XXX"
-- 用户问"看看 XXX 增加的原因"
-- 用户问"为什么 XXX 变化了"
-- 用户问"XXX 的影响因素是什么"
-- 需要对指标进行归因、拆解、对比分析
 
 ---
 
