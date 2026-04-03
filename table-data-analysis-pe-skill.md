@@ -5,7 +5,7 @@ description: 生产增强版表格数据分析。解决生产环境中的6个核
 
 # 表格数据分析（生产增强版）
 
-**版本：0.3.0**
+**版本：0.3.1**
 
 ## 生产环境问题与解决方案
 
@@ -17,6 +17,8 @@ description: 生产增强版表格数据分析。解决生产环境中的6个核
 | 4 | 计算出错（结论相反） | **计算校验环节** - 输出计算过程，逻辑自检，方向性检查 |
 | 5 | 结论无佐证理由 | **结论-证据绑定** - 每个结论必须关联具体数据证据 |
 | 6 | 计算不全且没检查 | **计算完整性检查** - 确保计算覆盖所有相关指标 |
+| 7 | 表格格式不规范，强行分析导致错误 | **规范性前置检查** - 不规范则终止，提示用户优化 |
+| 8 | 合并单元格导致数据行数错误 | **合并单元格检测与拆分** - 检测→拆分→填充，保证行数一致 |
 
 ---
 
@@ -47,8 +49,13 @@ digraph table_analysis_flow {
     subgraph cluster_0 {
         label="第一步：文件解析";
         detect_type [label="检测文件类型\n（Excel/CSV/其他）" shape=box];
+        check_format [label="规范性检查\n（表头、格式、可读性）" shape=box style=filled fillcolor=lightsalmon];
+        format_ok [label="格式规范？" shape=diamond];
+        format_stop [label="终止任务\n提示用户优化表格" shape=box style=filled fillcolor=red fontcolor=white];
         detect_sheets [label="检测多sheet\n（列出所有sheet名和规模）" shape=box];
-        extract_meta [label="提取元信息\n（列名、类型、行数）" shape=box style=filled fillcolor=lightyellow];
+        detect_merged [label="检测合并单元格\n（识别并记录位置）" shape=box style=filled fillcolor=lightyellow];
+        unmerge_fill [label="拆分并填充\n（保证行数一致）" shape=box style=filled fillcolor=lightyellow];
+        extract_meta [label="提取元信息\n（列名、类型、行数）" shape=box];
     }
 
     subgraph cluster_1 {
@@ -101,8 +108,13 @@ digraph table_analysis_flow {
     }
 
     start -> detect_type;
-    detect_type -> detect_sheets;
-    detect_sheets -> extract_meta;
+    detect_type -> check_format;
+    check_format -> format_ok;
+    format_ok -> format_stop [label="否"];
+    format_ok -> detect_sheets [label="是"];
+    detect_sheets -> detect_merged;
+    detect_merged -> unmerge_fill;
+    unmerge_fill -> extract_meta;
     extract_meta -> check_intent;
     check_intent -> extract_keywords;
     extract_keywords -> infer_metrics;
@@ -144,11 +156,58 @@ digraph table_analysis_flow {
 
 | 文件类型 | 处理方式 |
 |---------|---------|
-| Excel (.xlsx, .xls) | **必须检测多sheet** |
-| CSV | 单表处理 |
+| Excel (.xlsx, .xls) | **必须检测多sheet、合并单元格** |
+| CSV | 单表处理，无合并单元格问题 |
 | 其他格式 | 根据工程能力判断 |
 
-### 1.2 检测多Sheet（重要！）
+### 1.2 规范性检查（重要！必须执行）
+
+**如果表格不规范，必须终止任务，提示用户优化**
+
+#### 检查项目
+
+| 检查项 | 规范标准 | 不规范示例 | 处理方式 |
+|-------|---------|-----------|---------|
+| 表头存在 | 第一行必须是列名 | 无表头，直接是数据 | ❌ 终止，提示添加表头 |
+| 表头唯一 | 列名不能重复 | 两列都叫"销售额" | ❌ 终止，提示修改列名 |
+| 表头规范 | 列名有意义，非空 | 列名为空、"列1"、"A" | ❌ 终止，提示修改列名 |
+| 数据区域 | 数据从第二行开始 | 表头和数据混在一起 | ❌ 终止，提示调整格式 |
+| 列类型一致 | 每列数据类型一致 | 数值列中混入文本 | ⚠️ 警告，尝试处理 |
+
+#### 不规范表格处理流程
+
+```
+检测到不规范表格
+    ↓
+输出具体问题（哪些检查项不通过）
+    ↓
+给出优化建议（如何修改）
+    ↓
+终止当前分析任务
+    ↓
+等待用户重新上传
+```
+
+#### 不规范表格提示示例
+
+```markdown
+⚠️ **表格格式不规范，无法进行分析**
+
+检测到以下问题：
+
+| 问题 | 位置 | 说明 |
+|-----|------|------|
+| 缺少表头 | 第1行 | 第一行直接是数据，没有列名 |
+| 列名重复 | 第3列、第5列 | 两列都叫"金额"，无法区分 |
+
+**优化建议**：
+1. 在第一行添加列名（如：日期、地区、销售额、成本、利润）
+2. 将重复的列名改为不同名称（如：销售额、成本额）
+
+请修改后重新上传表格。
+```
+
+### 1.3 检测多Sheet（重要！）
 
 **Excel文件必须检测是否有多sheet**：
 
@@ -184,7 +243,110 @@ digraph table_analysis_flow {
 3. 分别分析各sheet
 ```
 
-### 1.3 提取元信息
+### 1.4 合并单元格检测与处理（重要！）
+
+**Excel文件必须检测并处理合并单元格**
+
+#### 什么是合并单元格问题
+
+```
+原始数据应该是4行：
+┌────────┬────────┐
+│ 月份   │ 销售额 │
+├────────┼────────┤
+│ 3月    │ 100    │
+│ 3月    │ 200    │
+│ 3月    │ 150    │
+│ 3月    │ 180    │
+└────────┴────────┘
+
+但用户可能合并了"3月"单元格：
+┌────────┬────────┐
+│ 月份   │ 销售额 │
+├────────┼────────┤
+│        │ 100    │
+│  3月   │ 200    │  ← 合并单元格，视觉上是1个，实际对应4行数据
+│        │ 150    │
+│        │ 180    │
+└────────┴────────┘
+
+错误读取：只读到1行"3月"
+正确处理：拆分后填充到4行都有"3月"
+```
+
+#### 检测合并单元格
+
+```
+检测内容：
+├── 是否存在合并单元格
+├── 合并单元格的位置（行、列）
+├── 合并范围（跨几行、跨几列）
+└── 合并单元格的值
+```
+
+| 合并类型 | 示例 | 影响 |
+|---------|------|------|
+| **行合并** | 同一值的多个单元格合并 | 该值只读一次，导致其他行缺失 |
+| **列合并** | 多列合并为一列 | 列信息丢失 |
+| **表头合并** | 多列表头合并 | 列名对应关系混乱 |
+
+#### 处理合并单元格
+
+**原则**：拆分合并单元格，将值填充到所有原始单元格
+
+```
+处理流程：
+1. 记录合并单元格的位置和范围
+2. 取消合并
+3. 将合并前的值填充到所有原始单元格
+4. 验证处理后的行数与数据行数一致
+```
+
+**处理示例**：
+
+```
+处理前（合并单元格）：
+┌────────┬────────┬────────┐
+│ 地区   │ 月份   │ 销售额 │
+├────────┼────────┼────────┤
+│        │        │ 100    │
+│  华东  │  3月   │ 200    │
+│        │        │ 150    │
+├────────┼────────┼────────┤
+│  华南  │  3月   │ 180    │
+└────────┴────────┴────────┘
+
+处理后（拆分并填充）：
+┌────────┬────────┬────────┐
+│ 地区   │ 月份   │ 销售额 │
+├────────┼────────┼────────┤
+│ 华东   │ 3月    │ 100    │
+│ 华东   │ 3月    │ 200    │
+│ 华东   │ 3月    │ 150    │
+├────────┼────────┼────────┤
+│ 华南   │ 3月    │ 180    │
+└────────┴────────┴────────┘
+```
+
+#### 验证处理结果
+
+**必须验证**：处理后的数据行数是否正确
+
+| 检查项 | 说明 |
+|-------|------|
+| 行数一致性 | 拆分后的行数 = 原始数据行数 |
+| 值填充完整 | 每行都有对应的维度值 |
+| 无空值 | 拆分填充后不应有空值（除非原始就是空） |
+
+#### 无法处理的情况
+
+| 情况 | 说明 | 处理方式 |
+|-----|------|---------|
+| 复杂嵌套合并 | 多层嵌套的合并单元格 | ⚠️ 警告，尝试处理，说明可能不准确 |
+| 数据区域不规则 | 合并单元格跨越数据和非数据区域 | ❌ 终止，提示用户优化表格 |
+| 合并导致信息丢失 | 合并前本就是不同值 | ❌ 终止，提示用户数据有问题 |
+
+### 1.5 提取元信息
 
 **遍历列，不遍历行数据**
 
@@ -726,7 +888,193 @@ digraph table_analysis_flow {
 
 ## Python/pandas 代码示例
 
-### 1. 文件解析与多Sheet检测
+### 1. 规范性检查
+
+```python
+import pandas as pd
+import numpy as np
+
+def check_table_format(df):
+    """检查表格格式是否规范"""
+    issues = []
+
+    # 1. 检查表头是否存在
+    if df.empty:
+        issues.append({
+            '问题': '表格为空',
+            '位置': '整表',
+            '说明': '表格没有任何数据'
+        })
+        return issues  # 空表直接返回
+
+    # 2. 检查列名是否为空或无意义
+    for i, col in enumerate(df.columns):
+        col_str = str(col).strip()
+        if col_str == '' or col_str == 'nan':
+            issues.append({
+                '问题': '列名为空',
+                '位置': f'第{i+1}列',
+                '说明': '列名不能为空'
+            })
+        elif col_str.lower() in ['unnamed', '列1', 'column1', 'a', 'b', 'c']:
+            issues.append({
+                '问题': '列名无意义',
+                '位置': f'第{i+1}列 ({col})',
+                '说明': '请使用有意义的列名'
+            })
+
+    # 3. 检查列名是否重复
+    col_counts = df.columns.value_counts()
+    duplicate_cols = col_counts[col_counts > 1]
+    for col in duplicate_cols.index:
+        issues.append({
+            '问题': '列名重复',
+            '位置': f'列名 "{col}"',
+            '说明': f'该列名出现了 {duplicate_cols[col]} 次'
+        })
+
+    # 4. 检查数据是否从第二行开始（第一行是表头）
+    first_row = df.iloc[0]
+    if first_row.isna().all():
+        issues.append({
+            '问题': '第一行为空',
+            '位置': '第1行',
+            '说明': '表头后第一行数据为空，请检查数据起始位置'
+        })
+
+    return issues
+
+# 使用示例
+df = pd.read_excel('data.xlsx', sheet_name='销售数据')
+issues = check_table_format(df)
+
+if issues:
+    print("⚠️ **表格格式不规范，无法进行分析**\n")
+    print("检测到以下问题：\n")
+    for issue in issues:
+        print(f"- {issue['问题']} | 位置：{issue['位置']} | {issue['说明']}")
+    print("\n请修改后重新上传表格。")
+else:
+    print("✅ 表格格式检查通过")
+```
+
+### 2. 合并单元格检测与处理
+
+```python
+from openpyxl import load_workbook
+
+def detect_and_unmerge_cells(file_path, sheet_name):
+    """检测并处理合并单元格"""
+    wb = load_workbook(file_path)
+    ws = wb[sheet_name]
+
+    # 检测合并单元格
+    merged_ranges = list(ws.merged_cells.ranges)
+
+    if not merged_ranges:
+        print("未检测到合并单元格")
+        return None
+
+    print(f"检测到 {len(merged_ranges)} 个合并单元格区域：\n")
+
+    unmerge_info = []
+    for merged_range in merged_ranges:
+        # 获取合并范围
+        min_row = merged_range.min_row
+        max_row = merged_range.max_row
+        min_col = merged_range.min_col
+        max_col = merged_range.max_col
+
+        # 获取合并单元格的值（只存储在左上角单元格）
+        value = ws.cell(row=min_row, column=min_col).value
+
+        row_span = max_row - min_row + 1
+        col_span = max_col - min_col + 1
+
+        print(f"  位置: 行{min_row}-{max_row}, 列{min_col}-{max_col}")
+        print(f"  范围: 跨{row_span}行, 跨{col_span}列")
+        print(f"  值: {value}\n")
+
+        unmerge_info.append({
+            'min_row': min_row,
+            'max_row': max_row,
+            'min_col': min_col,
+            'max_col': max_col,
+            'value': value
+        })
+
+        # 取消合并
+        ws.unmerge_cells(str(merged_range))
+
+        # 将值填充到所有原始单元格
+        for row in range(min_row, max_row + 1):
+            for col in range(min_col, max_col + 1):
+                ws.cell(row=row, column=col, value=value)
+
+    # 保存处理后的文件
+    output_path = file_path.replace('.xlsx', '_unmerged.xlsx')
+    wb.save(output_path)
+    print(f"已处理并保存到: {output_path}")
+
+    return unmerge_info
+
+# 使用示例
+unmerge_info = detect_and_unmerge_cells('data.xlsx', '销售数据')
+```
+
+### 3. 合并单元格处理后的数据读取
+
+```python
+def read_excel_with_unmerge(file_path, sheet_name):
+    """读取Excel并自动处理合并单元格"""
+    from openpyxl import load_workbook
+    import tempfile
+    import shutil
+
+    # 创建临时文件
+    temp_path = tempfile.mktemp(suffix='.xlsx')
+    shutil.copy(file_path, temp_path)
+
+    # 处理合并单元格
+    wb = load_workbook(temp_path)
+    ws = wb[sheet_name]
+
+    merged_ranges = list(ws.merged_cells.ranges)
+    if merged_ranges:
+        print(f"检测到 {len(merged_ranges)} 个合并单元格，正在处理...")
+        for merged_range in merged_ranges:
+            min_row = merged_range.min_row
+            max_row = merged_range.max_row
+            min_col = merged_range.min_col
+            max_col = merged_range.max_col
+            value = ws.cell(row=min_row, column=min_col).value
+
+            ws.unmerge_cells(str(merged_range))
+
+            # 填充值到所有单元格
+            for row in range(min_row, max_row + 1):
+                for col in range(min_col, max_col + 1):
+                    ws.cell(row=row, column=col, value=value)
+
+        wb.save(temp_path)
+        print("合并单元格处理完成")
+
+    # 用pandas读取处理后的文件
+    df = pd.read_excel(temp_path, sheet_name=sheet_name)
+
+    # 清理临时文件
+    import os
+    os.remove(temp_path)
+
+    return df
+
+# 使用示例
+df = read_excel_with_unmerge('data.xlsx', '销售数据')
+print(f"数据行数: {len(df)}")
+print(f"数据列数: {len(df.columns)}")
+```
+
+### 4. 文件解析与多Sheet检测
 
 ```python
 import pandas as pd
@@ -749,7 +1097,7 @@ for sheet_name in xl.sheet_names:
     print(f"列名: {df.columns.tolist()}")
 ```
 
-### 2. 指标/维度识别
+### 5. 指标/维度识别
 
 ```python
 def identify_columns(df):
@@ -789,7 +1137,7 @@ print(f"维度: {dimensions}")
 print(f"排除: {excluded}")
 ```
 
-### 3. 获取列级统计量（不遍历行）
+### 6. 获取列级统计量（不遍历行）
 
 ```python
 def get_column_stats(df):
@@ -829,7 +1177,7 @@ stats_df = get_column_stats(df)
 print(stats_df.to_string(index=False))
 ```
 
-### 4. 异动检测
+### 7. 异动检测
 
 ```python
 def detect_anomalies(df, metric_col, dim_col, threshold_pct=20):
@@ -871,7 +1219,7 @@ anomaly_df = detect_anomalies(df, '销售额', '地区')
 print(anomaly_df.to_string(index=False))
 ```
 
-### 5. 计算过程透明化
+### 8. 计算过程透明化
 
 ```python
 def calculate_with_proof(df, dim_col, metric_cols, calc_type='sum'):
@@ -907,6 +1255,16 @@ print(result_df.to_string(index=False))
 ## 强制检查清单
 
 **在输出前必须完成以下检查**：
+
+### 规范性检查（第一步必须）
+- [ ] 是否检查了表头存在且有意义？
+- [ ] 是否检查了列名不重复？
+- [ ] 是否在发现不规范时终止并提示用户？
+
+### 合并单元格检查（第一步必须）
+- [ ] 是否检测了合并单元格？
+- [ ] 是否对合并单元格进行了拆分填充？
+- [ ] 拆分后的行数是否与原始数据行数一致？
 
 ### 文件解析检查
 - [ ] 是否检测了多sheet？
@@ -953,14 +1311,18 @@ print(result_df.to_string(index=False))
 | 4 | 计算结论相反 | 方向性检查，逻辑自检 |
 | 5 | 结论无佐证 | 结论-证据绑定，强制要求 |
 | 6 | 计算不全 | 计算完整性检查清单 |
-| 7 | 忽略多sheet | 必须检测多sheet |
-| 8 | 没有分析体系 | 先建立框架再执行 |
-| 9 | 不查企业知识 | 必须查询，说明结果 |
+| 7 | 表格格式不规范，强行分析 | 规范性前置检查，不规范则终止 |
+| 8 | 合并单元格导致数据行数错误 | 合并单元格检测与拆分，保证行数一致 |
+| 9 | 忽略多sheet | 必须检测多sheet |
+| 10 | 没有分析体系 | 先建立框架再执行 |
+| 11 | 不查企业知识 | 必须查询，说明结果 |
 
 ## Red Flags - 停下来检查
 
 当你有以下想法时，停下来重新审视：
 
+- "表格格式有点问题，但应该能分析" → **必须先检查规范性，不规范则终止**
+- "合并单元格应该不影响" → **必须检测并处理合并单元格**
 - "这个指标应该不重要" → **必须扫描所有列，不能跳过**
 - "Excel应该只有一个sheet" → **必须检测多sheet**
 - "直接算出来就行了" → **必须输出计算过程和公式**
@@ -1013,6 +1375,7 @@ print(result_df.to_string(index=False))
 
 | 版本 | 日期 | 变更说明 |
 |-----|------|---------|
+| 0.3.1 | 2026-04-03 | **新增**：规范性前置检查（不规范则终止）、合并单元格检测与拆分处理（行合并、列合并）；新增生产问题#7、#8 |
 | 0.3.0 | 2026-04-03 | **重构**：新增文件解析（多sheet检测）、指标/维度识别、企业知识查询、建立分析体系环节；明确"遍历列不遍历行"原则；对齐intelligent-data-analysis流程 |
 | 0.2.0 | 2026-04-03 | 新增 Python/pandas 代码示例、透视表示例、统计陷阱警示、优化方向性检查说明 |
 | 0.1.0 | 2026-04-03 | 生产增强版：解决6个生产问题 - 全量扫描、异动检测、问题聚焦、计算校验、结论-证据绑定、完整性检查 |
