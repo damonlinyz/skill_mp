@@ -1,11 +1,11 @@
 ---
-name: table-data-analysis-pe
-description: 生产增强版表格数据分析。解决生产环境中的6个核心问题：指标覆盖不全、异动检测缺失、问题聚焦不准、计算错误、结论无佐证、计算不完整。强制全量指标扫描、标准化异动检测、问题聚焦机制、计算校验环节、结论-证据绑定。
+name: table-data-analysis
+description: Use when user uploads a table file (Excel, CSV) and asks to analyze the data. Handles file parsing (multi-sheet detection, merged cells), metric/dimension identification from column names, enterprise knowledge query, analysis framework building, anomaly detection (deviation, period comparison, outliers), calculation validation, and evidence-bound conclusions. Use for exploratory analysis, metric comparison, trend analysis, root cause finding on uploaded table data.
 ---
 
 # 表格数据分析（生产增强版）
 
-**版本：0.3.1**
+**版本：0.3.2**
 
 ## 生产环境问题与解决方案
 
@@ -1375,6 +1375,7 @@ print(result_df.to_string(index=False))
 
 | 版本 | 日期 | 变更说明 |
 |-----|------|---------|
+| 0.3.2 | 2026-04-03 | **重构name/description**：改为英文描述，明确触发场景（上传表格文件时触发） |
 | 0.3.1 | 2026-04-03 | **新增**：规范性前置检查（不规范则终止）、合并单元格检测与拆分处理（行合并、列合并）；新增生产问题#7、#8 |
 | 0.3.0 | 2026-04-03 | **重构**：新增文件解析（多sheet检测）、指标/维度识别、企业知识查询、建立分析体系环节；明确"遍历列不遍历行"原则；对齐intelligent-data-analysis流程 |
 | 0.2.0 | 2026-04-03 | 新增 Python/pandas 代码示例、透视表示例、统计陷阱警示、优化方向性检查说明 |
