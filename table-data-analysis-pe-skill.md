@@ -5,23 +5,36 @@ description: 生产增强版表格数据分析。解决生产环境中的6个核
 
 # 表格数据分析（生产增强版）
 
-**版本：0.2.0**
+**版本：0.3.0**
 
+## 生产环境问题与解决方案
 
+| # | 生产问题 | 本版本解决方案 |
+|---|---------|--------------|
+| 1 | 只读部分指标，缺乏整体意识和关联分析 | **全量指标扫描机制** - 遍历所有列，分析指标间关联 |
+| 2 | 没找异动点（相对均值的异常变化） | **标准化异动检测** - 三种检测方法：偏离均值、同环比、标准差 |
+| 3 | 没找到问题关键，顾左右而言他 | **问题聚焦机制** - 围绕用户问题找关键数据，排除干扰 |
+| 4 | 计算出错（结论相反） | **计算校验环节** - 输出计算过程，逻辑自检，方向性检查 |
+| 5 | 结论无佐证理由 | **结论-证据绑定** - 每个结论必须关联具体数据证据 |
+| 6 | 计算不全且没检查 | **计算完整性检查** - 确保计算覆盖所有相关指标 |
 
 ---
 
 ## Overview
 
-**核心原则**：理解问题 → 全量扫描 → 问题聚焦 → 异动检测 → 计算校验 → 结构化输出
+**核心原则**：文件解析 → 目的识别 → 指标/维度识别 → 查询企业知识 → 建立分析体系 → 异动检测 → 计算校验 → 结构化输出
 
 **与原版核心差异**：
-1. **强制全量**：必须遍历所有指标，不能跳过
-2. **异动优先**：先找异动，再分析原因
-3. **聚焦问题**：围绕用户问题，不做无关分析
-4. **计算透明**：每个计算都要输出公式和过程
-5. **证据绑定**：结论必须有数据支撑
-6. **方向检查**：确保"好/差"判断符合业务逻辑
+1. **多sheet检测**：Excel文件必须检测多sheet情况
+2. **指标/维度识别**：从列名推断，筛选相关列
+3. **企业知识优先**：有则参考，无则模型判断
+4. **分析体系先行**：先建立分析框架，再执行分析
+5. **遍历列不遍历行**：获取列的元信息和统计量，不遍历每行数据
+6. **强制全量**：必须遍历所有列，不能跳过
+7. **异动优先**：先找异动，再分析原因
+8. **聚焦问题**：围绕用户问题，不做无关分析
+9. **计算透明**：每个计算都要输出公式和过程
+10. **证据绑定**：结论必须有数据支撑
 
 ## 完整分析流程
 
@@ -32,70 +45,85 @@ digraph table_analysis_flow {
     start [label="用户上传表格+问题" shape=ellipse];
 
     subgraph cluster_0 {
-        label="第一步：理解问题";
-        check_intent [label="判断用户意图类型" shape=diamond];
-        explicit [label="明确型\n（具体指令）" shape=box];
-        vague [label="模糊型\n（探索性分析）" shape=box];
-        extract_keywords [label="提取问题关键词\n（确定分析焦点）" shape=box];
+        label="第一步：文件解析";
+        detect_type [label="检测文件类型\n（Excel/CSV/其他）" shape=box];
+        detect_sheets [label="检测多sheet\n（列出所有sheet名和规模）" shape=box];
+        extract_meta [label="提取元信息\n（列名、类型、行数）" shape=box style=filled fillcolor=lightyellow];
     }
 
     subgraph cluster_1 {
-        label="第二步：全量指标扫描";
-        scan_all [label="遍历所有列\n（不能跳过任何指标）" shape=box];
-        classify_columns [label="指标分类\n（核心/辅助/维度）" shape=box];
-        find_relations [label="指标关联分析\n（相关性与业务逻辑）" shape=box];
+        label="第二步：目的识别";
+        check_intent [label="识别分析目的\n（描述/对比/趋势/归因）" shape=box];
+        extract_keywords [label="提取问题关键词\n（确定分析焦点）" shape=box];
     }
 
     subgraph cluster_2 {
-        label="第三步：问题聚焦";
-        match_problem [label="匹配用户问题\n与指标的关系" shape=box];
-        identify_key [label="识别关键指标\n（直接回答问题的指标）" shape=box];
-        filter_noise [label="过滤干扰信息\n（与问题无关的分析）" shape=box];
+        label="第三步：指标/维度识别";
+        infer_metrics [label="从列名推断指标\n（数值型、可聚合）" shape=box style=filled fillcolor=lightgreen];
+        infer_dims [label="从列名推断维度\n（分类、时间）" shape=box style=filled fillcolor=lightgreen];
+        filter_cols [label="筛选相关列\n（排除ID、无关列）" shape=box];
     }
 
     subgraph cluster_3 {
-        label="第四步：异动检测";
+        label="第四步：查询企业知识";
+        check_knowledge [label="查询企业知识库" shape=box];
+        has_knowledge [label="有相关知识？" shape=diamond];
+        use_knowledge [label="参考企业知识\n（分析方法、业务规则）" shape=box style=filled fillcolor=lightblue];
+        no_knowledge [label="模型自主判断" shape=box];
+        merge_knowledge [label="整合知识" shape=box];
+    }
+
+    subgraph cluster_4 {
+        label="第五步：建立分析体系";
+        select_methods [label="选择分析方法\n（描述/对比/趋势/归因）" shape=box style=filled fillcolor=lightyellow];
+        select_dims [label="确定分析维度\n（按什么分组/切片）" shape=box style=filled fillcolor=lightyellow];
+        define_system [label="形成完整分析框架" shape=box];
+    }
+
+    subgraph cluster_5 {
+        label="第六步：异动检测";
         check_deviation [label="偏离均值检测\n（>N% 或 >2σ）" shape=box];
         check_trend [label="同环比检测\n（用户阈值或自动判断）" shape=box];
         check_outlier [label="异常值检测\n（统计方法）" shape=box];
         rank_anomalies [label="异动排序\n（按严重程度）" shape=box];
     }
 
-    subgraph cluster_4 {
-        label="第五步：计算与校验";
+    subgraph cluster_6 {
+        label="第七步：计算与校验";
         calc_with_formula [label="计算并输出公式" shape=box];
         calc_check [label="计算逻辑自检\n（结果是否合理）" shape=box];
-        direction_check [label="方向性检查\n（好/坏是否判断正确）" shape=box];
+        direction_check [label="方向性检查\n（好/坏是否判断正确）" shape=box style=filled fillcolor=lightsalmon];
     }
 
-    subgraph cluster_5 {
-        label="第六步：结构化输出";
+    subgraph cluster_7 {
+        label="第八步：结构化输出";
         output [label="输出结果\n（结论+证据+计算过程）" shape=box];
     }
 
-    start -> check_intent;
-    check_intent -> explicit [label="具体指令"];
-    check_intent -> vague [label="探索性"];
-    explicit -> extract_keywords;
-    vague -> extract_keywords;
-
-    extract_keywords -> scan_all;
-    scan_all -> classify_columns;
-    classify_columns -> find_relations;
-
-    find_relations -> match_problem;
-    match_problem -> identify_key;
-    identify_key -> filter_noise;
-
-    filter_noise -> check_deviation;
+    start -> detect_type;
+    detect_type -> detect_sheets;
+    detect_sheets -> extract_meta;
+    extract_meta -> check_intent;
+    check_intent -> extract_keywords;
+    extract_keywords -> infer_metrics;
+    infer_metrics -> infer_dims;
+    infer_dims -> filter_cols;
+    filter_cols -> check_knowledge;
+    check_knowledge -> has_knowledge;
+    has_knowledge -> use_knowledge [label="是"];
+    has_knowledge -> no_knowledge [label="否"];
+    use_knowledge -> merge_knowledge;
+    no_knowledge -> merge_knowledge;
+    merge_knowledge -> select_methods;
+    select_methods -> select_dims;
+    select_dims -> define_system;
+    define_system -> check_deviation;
     check_deviation -> check_trend;
     check_trend -> check_outlier;
     check_outlier -> rank_anomalies;
-
     rank_anomalies -> calc_with_formula;
     calc_with_formula -> calc_check;
     calc_check -> direction_check;
-
     direction_check -> output;
 }
 ```
@@ -110,16 +138,84 @@ digraph table_analysis_flow {
 
 ---
 
-## 第一步：理解问题
+## 第一步：文件解析
 
-### 用户意图类型
+### 1.1 检测文件类型
 
-| 类型 | 特点 | 示例 |
-|-----|------|------|
-| **明确型** | 用户给出具体指令 | "帮我算销售额的均值"、"把数据按地区分组汇总" |
-| **模糊型** | 用户只说目的，需模型探索 | "帮我分析下这个数据"、"看看有什么规律" |
+| 文件类型 | 处理方式 |
+|---------|---------|
+| Excel (.xlsx, .xls) | **必须检测多sheet** |
+| CSV | 单表处理 |
+| 其他格式 | 根据工程能力判断 |
 
-### 提取问题关键词
+### 1.2 检测多Sheet（重要！）
+
+**Excel文件必须检测是否有多sheet**：
+
+```
+检测内容：
+├── sheet数量
+├── 各sheet名称
+├── 各sheet行数、列数
+├── 各sheet列名（是否一致）
+└── 各sheet数据类型
+```
+
+| 情况 | 处理方式 |
+|-----|---------|
+| 单sheet | 直接处理 |
+| 多sheet，结构相同 | 可合并分析，询问用户 |
+| 多sheet，结构不同 | 询问用户分析哪个/关联分析 |
+
+**多sheet询问示例**：
+```
+检测到该Excel包含3个sheet：
+┌────────────┬────────┬────────┐
+│ Sheet名    │ 行数   │ 列数   │
+├────────────┼────────┼────────┤
+│ 销售数据   │ 1000   │ 8      │
+│ 产品信息   │ 50     │ 5      │
+│ 客户信息   │ 200    │ 6      │
+└────────────┴────────┴────────┘
+
+请确认：
+1. 只分析"销售数据"
+2. 关联分析（如销售+产品信息）
+3. 分别分析各sheet
+```
+
+### 1.3 提取元信息
+
+**遍历列，不遍历行数据**
+
+| 信息 | 获取方式 | 用途 |
+|-----|---------|------|
+| 列名 | 读取表头 | 推断指标/维度 |
+| 列数 | 结构信息 | 了解数据宽度 |
+| 行数 | 计数 | 了解数据规模 |
+| 列类型 | 采样推断 | 数值/文本/日期 |
+| 每列统计量 | 聚合计算 | 均值、唯一值数等 |
+
+**重要原则**：
+- ✅ 遍历所有列，获取列级元信息
+- ✅ 获取每列的聚合统计量（均值、求和、唯一值数等）
+- ❌ 不遍历每行数据
+
+---
+
+## 第二步：目的识别
+
+### 2.1 识别分析目的
+
+| 目的类型 | 特征 | 示例问题 |
+|---------|------|---------|
+| 描述性 | 了解现状 | "这个数据是什么样的" |
+| 对比性 | 比较差异 | "A和B有什么区别"、"哪个城市表现最好" |
+| 趋势性 | 看变化 | "销售趋势如何" |
+| 归因性 | 找原因 | "为什么下降了" |
+| 预测性 | 看未来 | "下月会怎样" |
+
+### 2.2 提取问题关键词
 
 **必须执行**：从用户问题中提取关键词，确定分析焦点
 
@@ -130,97 +226,235 @@ digraph table_analysis_flow {
 | 时间范围 | 用户关注的时间段 | "本月" → 当前月 |
 | 指标暗示 | 用户隐含关注的指标 | "表现如何" → 需要定义什么是"表现" |
 
+### 2.3 用户意图类型
+
+| 类型 | 特点 | 处理方式 |
+|-----|------|---------|
+| **明确型** | 用户给出具体指令 | 按指令执行 + 补充分析 |
+| **模糊型** | 用户只说目的 | 自主探索 + 确认（如支持追问） |
+
 ---
 
-## 第二步：全量指标扫描
+## 第三步：指标/维度识别
 
-**强制要求：必须遍历所有列，不能跳过任何指标**
+**核心环节**：从列名推断指标和维度，筛选相关列
 
-### 2.1 遍历所有列
+### 3.1 从列名推断指标
 
-| 信息 | 查询内容 | 输出要求 |
-|-----|---------|---------|
-| 列名 | 所有列的名称 | 列出全部，不能遗漏 |
-| 数据类型 | 每列的类型 | 数值/文本/日期 |
-| 业务含义 | 推断每列的业务含义 | 即使不确定也要标注"待确认" |
-| 统计概要 | 每列的基础统计 | 数值列：均值/中位数/极值；文本列：唯一值/频次 |
+**指标特征**：数值型、可聚合、有业务含义
 
-### 2.2 指标分类
+| 判断依据 | 是指标 | 不是指标 |
+|---------|--------|---------|
+| 数据类型 | 数值型 | 文本、ID |
+| 聚合性 | 可求和/均值 | 不可聚合 |
+| 业务含义 | 度量值 | 标识值 |
 
-将所有列分为三类：
+| 列名示例 | 推断结果 | 原因 |
+|---------|----------|------|
+| 销售额 | ✅ 指标 | 数值型，可求和 |
+| 数量 | ✅ 指标 | 数值型，可求和 |
+| 单价 | ✅ 指标 | 数值型，可求均值 |
+| 客户评分 | ✅ 指标 | 数值型，可求均值 |
+| 订单ID | ❌ 排除 | 不可聚合，唯一标识 |
+| 姓名 | ❌ 排除 | 文本型，非度量 |
 
-| 类型 | 定义 | 处理方式 |
-|-----|------|---------|
-| **核心指标** | 直接回答用户问题的指标 | 重点分析 |
-| **辅助指标** | 帮助理解核心指标的指标 | 关联分析 |
-| **维度列** | 用于分组的列 | 作为分析维度 |
+### 3.2 从列名推断维度
 
-### 2.3 指标关联分析
+**维度特征**：分类型、用于分组、时间
 
-**必须分析指标之间的关联**：
+| 判断依据 | 是维度 | 不是维度 |
+|---------|--------|---------|
+| 数据类型 | 文本、日期 | 数值（通常） |
+| 唯一值数 | 较少（<行数10%） | 很多（接近行数） |
+| 分组意义 | 有业务分组价值 | 无分组价值 |
 
-| 关联类型 | 检查方法 | 示例 |
-|---------|---------|------|
-| 计算关系 | 一个指标是否由其他指标计算得出 | 毛利率 = (收入-成本)/收入 |
-| 业务关系 | 指标之间是否有业务逻辑关联 | 销售额 = 销量 × 单价 |
-| 相关性 | 数值指标之间的统计相关性 | 相关系数矩阵 |
+| 列名示例 | 推断结果 | 原因 |
+|---------|----------|------|
+| 地区 | ✅ 维度 | 分类，用于分组 |
+| 日期 | ✅ 维度 | 时间，用于趋势 |
+| 产品类别 | ✅ 维度 | 分类，用于分组 |
+| 销售员 | ✅ 维度 | 分类，用于分组 |
+| 订单ID | ❌ 排除 | 唯一值，无分组意义 |
 
-**输出要求**：
+### 3.3 筛选相关列
+
+**排除不需要分析的列**：
+
+| 排除类型 | 示例 | 原因 |
+|---------|------|------|
+| ID列 | 订单ID、用户ID、流水号 | 唯一标识，无分析意义 |
+| 技术列 | created_at、updated_by、version | 系统字段，非业务 |
+| 冗余列 | 与其他列高度相关或重复 | 避免重复分析 |
+
+### 3.4 指标/维度识别输出
+
+**必须输出以下内容**：
+
 ```markdown
-### 指标关联图
-- [指标A] = [指标B] × [指标C]
-- [指标D] 与 [指标E] 高度相关（相关系数 0.85）
-- [指标F] 与 [指标G] 存在计算关系但数据不匹配（差值 XX）
+### 指标/维度识别结果
+
+| 列名 | 类型 | 推断含义 | 是否分析 |
+|-----|------|---------|---------|
+| 订单ID | 排除 | 唯一标识 | ❌ |
+| 日期 | 维度 | 订单日期 | ✅ |
+| 地区 | 维度 | 销售区域 | ✅ |
+| 销售额 | 指标 | 订单金额 | ✅ |
+| 销量 | 指标 | 销售数量 | ✅ |
+| 成本 | 指标 | 订单成本 | ✅ |
+
+**识别汇总**：
+- 指标（3个）：销售额、销量、成本
+- 维度（2个）：日期、地区
+- 排除（1个）：订单ID
 ```
 
 ---
 
-## 第三步：问题聚焦
+## 第四步：查询企业知识
 
-**核心目标：围绕用户问题找到关键数据，排除干扰信息**
+**目的**：查询企业知识库，获取相关的分析方法或业务规则
 
-### 3.1 匹配用户问题与指标
+### 4.1 查询内容
 
-| 步骤 | 动作 | 示例 |
-|-----|------|------|
-| 1 | 提取问题核心 | "哪个城市表现最好" → 核心是"表现" |
-| 2 | 定义"表现"的度量 | 表现 = 销售额？利润？增长率？ |
-| 3 | 匹配可用指标 | 数据中有：销售额、利润、毛利率 |
-| 4 | 确定分析逻辑 | 按城市分组 → 比较指标 → 排名 |
+| 查询项 | 说明 | 示例 |
+|-------|------|------|
+| 分析方法 | 类似场景的分析方法 | "销售数据分析" → 推荐趋势分析、同期对比 |
+| 业务规则 | 业务相关的计算规则 | "毛利率计算" → 公式：(收入-成本)/收入 |
+| 数据字典 | 字段含义的解释 | "订单状态" → 各状态值含义 |
+| 指标定义 | 指标的业务定义 | "客单价" → 销售额/订单数 |
+| 行业标准 | 行业通用做法 | "客户分群" → RFM模型 |
 
-### 3.2 识别关键指标
+### 4.2 知识来源优先级
 
-**关键指标 = 直接回答用户问题的指标**
+| 优先级 | 来源 | 说明 |
+|-------|------|------|
+| 1 | 用户指定 | 用户明确说明的计算规则/方法 |
+| 2 | 企业知识库 | 有历史经验优先参考 |
+| 3 | 模型判断 | 无知识时，模型自主判断 |
 
-| 问题类型 | 关键指标识别 |
-|---------|------------|
-| "哪个X表现最好" | 表现的定义 → 对应指标 → 排序 |
-| "为什么Y下降" | Y的变化 → 分解因素 → 找主要原因 |
-| "Z的趋势如何" | Z的时间序列 → 趋势方向 → 变化点 |
-| "A和B的关系" | A和B的相关性 → 散点图 → 业务解释 |
+### 4.3 查询示例
 
-### 3.3 过滤干扰信息
+```
+场景：用户上传销售数据表格，问"帮我分析下销售情况"
 
-**必须排除与问题无关的分析**
+查询企业知识库：
+→ 是否有"销售数据分析"相关案例？
+→ 是否有相关字段的业务定义？
+→ 是否有计算规则（如客单价、毛利率）？
 
-| 情况 | 处理 |
-|-----|------|
-| 指标与问题无关 | 不分析，在"未分析"中说明 |
-| 维度与问题无关 | 不分组，避免信息过载 |
-| 分析与问题脱节 | 删除，重新聚焦 |
+有知识：
+→ 参考推荐的分析方法
+→ 应用业务规则
+→ 使用指标定义
 
-**检查清单**：
-- [ ] 每个分析都直接服务于用户问题？
-- [ ] 没有做与问题无关的"补充分析"？
-- [ ] 结论直接回答了用户的问题？
+无知识：
+→ 模型自主构建分析体系
+→ 基于列名推断业务含义
+```
+
+### 4.4 知识应用输出
+
+**无论是否有企业知识，都需要输出**：
+
+```markdown
+### 企业知识查询结果
+
+**查询状态**：[有知识 / 无知识]
+
+**参考内容**（如有）：
+- 分析方法：[方法名称]
+- 业务规则：[规则说明]
+- 指标定义：[定义内容]
+
+**自主判断**（如无知识）：
+- 分析方法选择：[方法及原因]
+- 指标定义：[推断的定义]
+```
 
 ---
 
-## 第四步：异动检测
+## 第五步：建立分析体系
+
+### 5.1 选择分析方法
+
+基于：目的 + 指标 + 维度 + 企业知识
+
+| 分析目的 | 推荐方法 | 适用场景 |
+|---------|---------|---------|
+| 描述性 | 描述统计 | 了解数据分布 |
+| 对比性 | 维度对比 | 比较不同组差异 |
+| 趋势性 | 时间趋势 | 看时间变化 |
+| 归因性 | 贡献度分析 | 找变化原因 |
+| 预测性 | 趋势外推 | 预测未来 |
+
+### 5.2 确定分析维度
+
+基于：用户目的 + 可用维度
+
+| 分析目的 | 推荐维度 | 示例 |
+|---------|---------|------|
+| 整体概况 | 不分组 | 总销售额、总订单数 |
+| 看分布 | 分类维度 | 按地区、按产品 |
+| 看趋势 | 时间维度 | 按月、按季度 |
+| 看对比 | 对比维度 | 今年vs去年、A组vs B组 |
+
+### 5.3 形成分析框架
+
+**必须输出完整的分析框架**：
+
+```markdown
+### 分析体系
+
+**分析目的**：[用户想解决什么问题]
+
+**关键指标**：
+- 核心指标：[直接回答问题的指标]
+- 辅助指标：[帮助理解核心指标的指标]
+
+**分析维度**：
+- 主维度：[主要分组维度]
+- 辅助维度：[补充分析维度]
+
+**分析方法**：
+| 分析项 | 方法 | 指标 | 维度 |
+|-------|------|------|------|
+| 主分析 | [方法] | [指标] | [维度] |
+| 补充分析 | [方法] | [指标] | [维度] |
+
+**预期输出**：
+- [输出1]
+- [输出2]
+```
+
+### 5.4 分析体系示例
+
+```
+用户目的："哪个城市表现最好？"
+
+分析体系：
+├── 目的：对比各城市表现，找出最优
+├── 关键指标
+│   ├── 核心：销售额（度量业绩规模）、毛利率（度量盈利能力）
+│   └── 辅助：订单数、客单价
+├── 分析维度
+│   ├── 主维度：城市
+│   └── 辅助维度：时间（看趋势是否稳定）
+├── 分析方法
+│   ├── 主分析：维度对比（各城市指标对比排名）
+│   └── 补充分析：趋势分析（表现是否稳定）
+└── 预期输出
+    ├── 各城市指标排名表
+    ├── 最优城市及原因
+    └── 表现稳定性说明
+```
+
+---
+
+## 第六步：异动检测
 
 **三种检测方法，必须全部执行**
 
-### 4.1 偏离均值检测
+### 6.1 偏离均值检测
 
 | 检测方法 | 阈值 | 说明 |
 |---------|------|------|
@@ -237,7 +471,7 @@ digraph table_analysis_flow {
 | 城市B | 70 | 100 | -30% | 🔴 严重偏低 |
 ```
 
-### 4.2 同环比检测
+### 6.2 同环比检测
 
 **阈值优先级**：用户指定 > 企业知识库 > 模型自动判断
 
@@ -259,15 +493,15 @@ digraph table_analysis_flow {
 **阈值说明**：用户未指定，采用模型自动判断阈值 15%（基于数据波动范围）
 ```
 
-### 4.3 异常值检测
+### 6.3 异常值检测
 
 | 检测方法 | 说明 |
 |---------|------|
 | IQR 方法 | 超过 Q3+1.5×IQR 或低于 Q1-1.5×IQR |
-| Z-score | |Z| > 3 |
+| Z-score | \|Z\| > 3 |
 | 业务规则 | 根据业务逻辑判断（如负利润） |
 
-### 4.4 异动排序
+### 6.4 异动排序
 
 **按严重程度排序，优先报告最严重的异动**
 
@@ -279,11 +513,11 @@ digraph table_analysis_flow {
 
 ---
 
-## 第五步：计算与校验
+## 第七步：计算与校验
 
 **核心目标：确保计算正确，结论方向正确**
 
-### 5.1 计算透明化
+### 7.1 计算透明化
 
 **每个计算必须输出**：
 
@@ -313,7 +547,7 @@ digraph table_analysis_flow {
 **结果**：城市A毛利率 = 40%
 ```
 
-### 5.2 计算逻辑自检
+### 7.2 计算逻辑自检
 
 **每个计算后必须自检**：
 
@@ -323,7 +557,7 @@ digraph table_analysis_flow {
 | 逻辑一致性 | 相关指标是否一致 | 如：各部分之和≠总量，需检查 |
 | 方向正确 | 好/坏判断是否正确 | 毛利率下降≠表现好 |
 
-### 5.3 方向性检查（重要！）
+### 7.3 方向性检查（重要！）
 
 **必须检查：结论方向是否正确**
 
@@ -352,7 +586,7 @@ digraph table_analysis_flow {
 **结论**：城市A表现最好（毛利率最高且在提升）
 ```
 
-### 5.4 计算完整性检查
+### 7.4 计算完整性检查
 
 **确保计算覆盖所有相关指标**
 
@@ -364,40 +598,53 @@ digraph table_analysis_flow {
 
 ---
 
-## 第六步：结构化输出
+## 第八步：结构化输出
 
-**输出原则：结论 + 证据 + 计算过程**
+**输出原则：文件信息 → 指标识别 → 分析体系 → 异动检测 → 结论+证据+计算过程**
 
 ```markdown
-## 数据概况
+## 文件概况
 
-### 数据基本信息
-[行数、列数、数据类型、时间范围等基本信息]
+### 文件信息
+- 文件类型：[Excel/CSV]
+- Sheet数量：[数量，如多sheet列出各sheet名]
+- 数据规模：[行数] 行 × [列数] 列
 
-### 全量指标清单
-[所有列的清单，不能遗漏]
-
-| 列名 | 业务含义 | 数据类型 | 统计概要 |
-|-----|---------|---------|---------|
+### 多Sheet说明（如适用）
+| Sheet名 | 行数 | 列数 | 是否选中 |
+|--------|------|------|---------|
 | ... | ... | ... | ... |
-
-### 指标关联
-[指标之间的计算关系和相关性]
 
 ---
 
-## 问题聚焦
+## 指标/维度识别
 
-### 用户问题
-[用户原始问题]
+### 识别结果
 
-### 问题关键词提取
-- 业务对象：[...]
-- 分析维度：[...]
-- 关键指标：[...]
+| 列名 | 类型 | 推断含义 | 是否分析 |
+|-----|------|---------|---------|
+| ... | 指标/维度/排除 | ... | ✅/❌ |
 
-### 关键指标识别
-[哪些指标直接回答用户问题]
+### 企业知识查询
+- 查询状态：[有/无]
+- 参考内容：[...]
+
+---
+
+## 分析体系
+
+### 分析目的
+[用户想解决什么问题]
+
+### 关键指标
+- 核心指标：[...]
+- 辅助指标：[...]
+
+### 分析方法
+| 分析项 | 方法 | 指标 | 维度 |
+|-------|------|------|------|
+| 主分析 | ... | ... | ... |
+| 补充分析 | ... | ... | ... |
 
 ---
 
@@ -408,9 +655,6 @@ digraph table_analysis_flow {
 
 ### 同环比检测
 [检测结果，含阈值说明]
-
-### 异常值检测
-[检测结果]
 
 ### 异动汇总（按严重程度排序）
 1. 🔴 [最严重异动]
@@ -482,267 +726,180 @@ digraph table_analysis_flow {
 
 ## Python/pandas 代码示例
 
-### 1. 数据读取与基本信息
+### 1. 文件解析与多Sheet检测
 
 ```python
 import pandas as pd
 import numpy as np
 
-# 读取数据
-file_path = 'sales.xlsx'
-df = pd.read_excel(file_path, sheet_name='sales')
+# 读取Excel，获取所有sheet名
+file_path = 'data.xlsx'
+xl = pd.ExcelFile(file_path)
 
-# 或者读取 CSV
-# df = pd.read_csv('sales.csv')
+print("=== 文件解析 ===\n")
+print(f"文件类型: Excel")
+print(f"Sheet数量: {len(xl.sheet_names)}")
+print(f"Sheet列表: {xl.sheet_names}")
 
-# 基本信息
-print(f"数据行数: {len(df)}")
-print(f"数据列数: {len(df.columns)}")
-print(f"\n列名列表: {df.columns.tolist()}")
-
-# 数据类型
-print(f"\n数据类型:")
-print(df.dtypes)
-
-# 前5行预览
-print(f"\n前5行数据:")
-print(df.head())
-
-# 基础统计
-print(f"\n数值列统计概要:")
-print(df.describe())
-```
-
-### 2. 全量指标扫描
-
-```python
-# 遍历所有列
-print("=== 全量指标扫描 ===\n")
-
-for col in df.columns:
-    print(f"列名: {col}")
-    print(f"  数据类型: {df[col].dtype}")
-    print(f"  缺失值: {df[col].isna().sum()} ({df[col].isna().mean()*100:.1f}%)")
-
-    if df[col].dtype in ['int64', 'float64']:
-        print(f"  均值: {df[col].mean():.2f}")
-        print(f"  中位数: {df[col].median():.2f}")
-        print(f"  标准差: {df[col].std():.2f}")
-        print(f"  最小值: {df[col].min():.2f}")
-        print(f"  最大值: {df[col].max():.2f}")
-    else:
-        print(f"  唯一值数量: {df[col].nunique()}")
-        print(f"  最常见值: {df[col].mode().iloc[0] if len(df[col].mode()) > 0 else 'N/A'}")
-    print()
-```
-
-### 3. 指标关联分析
-
-```python
-# 数值列相关性矩阵
-numeric_cols = df.select_dtypes(include=[np.number]).columns
-corr_matrix = df[numeric_cols].corr()
-
-print("=== 指标关联分析 ===\n")
-print("相关性矩阵:")
-print(corr_matrix)
-
-# 找出高度相关的指标对（相关系数 > 0.8）
-print("\n高度相关的指标对（相关系数 > 0.8）:")
-for i in range(len(corr_matrix.columns)):
-    for j in range(i+1, len(corr_matrix.columns)):
-        if abs(corr_matrix.iloc[i, j]) > 0.8:
-            print(f"  {corr_matrix.columns[i]} <-> {corr_matrix.columns[j]}: {corr_matrix.iloc[i, j]:.3f}")
-```
-
-### 4. 透视表分析
-
-```python
-# 透视表：按城市统计销售额和利润
-pivot_by_city = df.pivot_table(
-    index='城市',
-    values=['销售额', '利润', '销量'],
-    aggfunc={'销售额': 'sum', '利润': 'sum', '销量': 'sum'}
-)
-
-print("=== 按城市透视表 ===\n")
-print(pivot_by_city)
-
-# 透视表：按城市和月份
-pivot_by_city_month = df.pivot_table(
-    index='城市',
-    columns='月份',
-    values='销售额',
-    aggfunc='sum',
-    fill_value=0
-)
-
-print("\n=== 按城市-月份透视表 ===\n")
-print(pivot_by_city_month)
-
-# 计算毛利率
-if '销售额' in df.columns and '成本' in df.columns:
-    df['毛利率'] = (df['销售额'] - df['成本']) / df['销售额'] * 100
-    print("\n毛利率计算公式: (销售额 - 成本) / 销售额 * 100")
-```
-
-### 5. 异动检测
-
-```python
-# 5.1 偏离均值检测
-print("=== 偏离均值检测 ===\n")
-
-# 计算各城市毛利率均值
-city_gmr = df.groupby('城市')['毛利率'].mean()
-overall_mean = city_gmr.mean()
-overall_std = city_gmr.std()
-
-print(f"整体均值: {overall_mean:.2f}%")
-print(f"整体标准差: {overall_std:.2f}%")
-print(f"2σ 阈值: {2 * overall_std:.2f}%\n")
-
-for city, gmr in city_gmr.items():
-    deviation = gmr - overall_mean
-    deviation_pct = deviation / overall_mean * 100
-    z_score = deviation / overall_std
-
-    if abs(z_score) > 3:
-        status = "🔴 严重异动"
-    elif abs(z_score) > 2:
-        status = "🟠 中等异动"
-    elif abs(deviation_pct) > 20:
-        status = "🟡 轻微异动"
-    else:
-        status = "✅ 正常"
-
-    print(f"{city}: {gmr:.2f}% (偏离 {deviation_pct:+.1f}%, Z={z_score:.2f}) {status}")
-
-# 5.2 同环比检测
-print("\n=== 同环比检测 ===\n")
-
-# 假设有月份列，计算环比
-if '月份' in df.columns:
-    monthly_sales = df.groupby('月份')['销售额'].sum().sort_index()
-    monthly_sales_pct = monthly_sales.pct_change() * 100
-
-    # 用户指定阈值，如果没有则模型自动判断
-    threshold = 15  # 默认15%
-
-    for month, pct in monthly_sales_pct.items():
-        if pd.notna(pct):
-            if abs(pct) > threshold:
-                status = "🔴 异动"
-            else:
-                status = "✅ 正常"
-            print(f"{month}: 环比 {pct:+.1f}% {status}")
-
-    print(f"\n阈值说明: 用户未指定，采用默认阈值 {threshold}%")
-
-# 5.3 异常值检测 (IQR方法)
-print("\n=== 异常值检测 (IQR) ===\n")
-
-Q1 = df['毛利率'].quantile(0.25)
-Q3 = df['毛利率'].quantile(0.75)
-IQR = Q3 - Q1
-lower_bound = Q1 - 1.5 * IQR
-upper_bound = Q3 + 1.5 * IQR
-
-outliers = df[(df['毛利率'] < lower_bound) | (df['毛利率'] > upper_bound)]
-
-print(f"Q1: {Q1:.2f}, Q3: {Q3:.2f}, IQR: {IQR:.2f}")
-print(f"正常范围: [{lower_bound:.2f}, {upper_bound:.2f}]")
-print(f"\n异常值数量: {len(outliers)}")
-if len(outliers) > 0:
-    print(outliers[['城市', '毛利率']])
-```
-
-### 6. 计算过程透明化示例
-
-```python
-print("=== 计算过程示例 ===\n")
-
-# 示例：计算城市A的毛利率
-city = '城市A'
-city_data = df[df['城市'] == city]
-
-print(f"指标: {city}毛利率")
-print(f"\n公式: 毛利率 = (销售额 - 成本) / 销售额 × 100%")
-
-sales = city_data['销售额'].sum()
-cost = city_data['成本'].sum()
-
-print(f"\n数据:")
-print(f"  销售额 = {sales:,.0f}")
-print(f"  成本 = {cost:,.0f}")
-
-gross_profit = sales - cost
-gross_margin = gross_profit / sales * 100
-
-print(f"\n计算:")
-print(f"  毛利 = {sales:,.0f} - {cost:,.0f} = {gross_profit:,.0f}")
-print(f"  毛利率 = {gross_profit:,.0f} / {sales:,.0f} × 100% = {gross_margin:.2f}%")
-
-print(f"\n结果: {city}毛利率 = {gross_margin:.2f}%")
-
-# 方向性检查
-print(f"\n=== 方向性检查 ===")
-print(f"问题: 哪个城市表现最好？")
-print(f"判断逻辑: 毛利率越高 → 表现越好")
-print(f"检查结果: 毛利率 {gross_margin:.2f}% 在所有城市中排名...")
-```
-
-### 7. 完整分析流程示例
-
-```python
-def analyze_table(df, user_question):
-    """完整表格分析流程"""
-
-    # 第一步：理解问题
-    print("=" * 50)
-    print("第一步：理解问题")
-    print("=" * 50)
-    print(f"用户问题: {user_question}")
-    print(f"问题类型: {'明确型' if '计算' in user_question or '统计' in user_question else '模糊型'}")
-
-    # 第二步：全量指标扫描
-    print("\n" + "=" * 50)
-    print("第二步：全量指标扫描")
-    print("=" * 50)
-    print(f"总列数: {len(df.columns)}")
+# 读取各sheet的基本信息
+for sheet_name in xl.sheet_names:
+    df = pd.read_excel(file_path, sheet_name=sheet_name)
+    print(f"\n--- Sheet: {sheet_name} ---")
+    print(f"行数: {len(df)}, 列数: {len(df.columns)}")
     print(f"列名: {df.columns.tolist()}")
+```
 
-    # 指标分类
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    text_cols = df.select_dtypes(include=['object']).columns.tolist()
-    print(f"\n数值列: {numeric_cols}")
-    print(f"文本列: {text_cols}")
+### 2. 指标/维度识别
 
-    # 第三步：问题聚焦
-    print("\n" + "=" * 50)
-    print("第三步：问题聚焦")
-    print("=" * 50)
-    print("根据用户问题，确定关键指标...")
+```python
+def identify_columns(df):
+    """识别指标和维度"""
+    metrics = []
+    dimensions = []
+    excluded = []
 
-    # 第四步：异动检测
-    print("\n" + "=" * 50)
-    print("第四步：异动检测")
-    print("=" * 50)
-    # ... 异动检测代码 ...
+    for col in df.columns:
+        # 判断是否为ID列（唯一值接近行数）
+        if df[col].nunique() == len(df):
+            excluded.append((col, '唯一标识'))
+            continue
 
-    # 第五步：计算与校验
-    print("\n" + "=" * 50)
-    print("第五步：计算与校验")
-    print("=" * 50)
-    # ... 计算与校验代码 ...
+        # 判断是否为技术列
+        tech_keywords = ['created', 'updated', 'version', 'id', '_at', '_by']
+        if any(kw in col.lower() for kw in tech_keywords):
+            excluded.append((col, '技术字段'))
+            continue
 
-    # 第六步：结构化输出
-    print("\n" + "=" * 50)
-    print("第六步：结构化输出")
-    print("=" * 50)
-    # ... 输出结果 ...
+        # 数值型 → 指标
+        if df[col].dtype in ['int64', 'float64']:
+            metrics.append(col)
+        else:
+            # 文本/日期型 → 维度
+            dimensions.append(col)
+
+    return metrics, dimensions, excluded
 
 # 使用示例
-# analyze_table(df, "哪个城市表现最好？")
+df = pd.read_excel('data.xlsx', sheet_name='销售数据')
+metrics, dimensions, excluded = identify_columns(df)
+
+print("=== 指标/维度识别 ===\n")
+print(f"指标: {metrics}")
+print(f"维度: {dimensions}")
+print(f"排除: {excluded}")
+```
+
+### 3. 获取列级统计量（不遍历行）
+
+```python
+def get_column_stats(df):
+    """获取每列的统计量，不遍历行数据"""
+    stats = []
+
+    for col in df.columns:
+        col_info = {
+            '列名': col,
+            '数据类型': str(df[col].dtype),
+            '缺失值': df[col].isna().sum(),
+            '缺失率': f"{df[col].isna().mean()*100:.1f}%"
+        }
+
+        if df[col].dtype in ['int64', 'float64']:
+            col_info.update({
+                '均值': f"{df[col].mean():.2f}",
+                '中位数': f"{df[col].median():.2f}",
+                '标准差': f"{df[col].std():.2f}",
+                '最小值': f"{df[col].min():.2f}",
+                '最大值': f"{df[col].max():.2f}",
+                '类型': '指标'
+            })
+        else:
+            col_info.update({
+                '唯一值数': df[col].nunique(),
+                '最常见值': df[col].mode().iloc[0] if len(df[col].mode()) > 0 else 'N/A',
+                '类型': '维度'
+            })
+
+        stats.append(col_info)
+
+    return pd.DataFrame(stats)
+
+# 使用示例
+stats_df = get_column_stats(df)
+print(stats_df.to_string(index=False))
+```
+
+### 4. 异动检测
+
+```python
+def detect_anomalies(df, metric_col, dim_col, threshold_pct=20):
+    """异动检测"""
+    # 按维度聚合
+    grouped = df.groupby(dim_col)[metric_col].sum()
+    mean_val = grouped.mean()
+    std_val = grouped.std()
+
+    results = []
+    for dim, val in grouped.items():
+        deviation = val - mean_val
+        deviation_pct = deviation / mean_val * 100 if mean_val != 0 else 0
+        z_score = deviation / std_val if std_val != 0 else 0
+
+        # 判断异动程度
+        if abs(z_score) > 3:
+            status = "🔴 严重"
+        elif abs(z_score) > 2:
+            status = "🟠 中等"
+        elif abs(deviation_pct) > threshold_pct:
+            status = "🟡 轻微"
+        else:
+            status = "✅ 正常"
+
+        results.append({
+            '维度': dim,
+            '值': val,
+            '均值': mean_val,
+            '偏离%': f"{deviation_pct:+.1f}%",
+            'Z分数': f"{z_score:.2f}",
+            '判定': status
+        })
+
+    return pd.DataFrame(results).sort_values('判定')
+
+# 使用示例
+anomaly_df = detect_anomalies(df, '销售额', '地区')
+print(anomaly_df.to_string(index=False))
+```
+
+### 5. 计算过程透明化
+
+```python
+def calculate_with_proof(df, dim_col, metric_cols, calc_type='sum'):
+    """计算并输出过程"""
+    results = []
+
+    for dim in df[dim_col].unique():
+        dim_data = df[df[dim_col] == dim]
+
+        row = {'维度': dim}
+        for col in metric_cols:
+            if calc_type == 'sum':
+                val = dim_data[col].sum()
+                formula = f"SUM({col})"
+            elif calc_type == 'mean':
+                val = dim_data[col].mean()
+                formula = f"AVG({col})"
+
+            row[col] = val
+            row[f'{col}_公式'] = formula
+
+        results.append(row)
+
+    return pd.DataFrame(results)
+
+# 使用示例
+result_df = calculate_with_proof(df, '地区', ['销售额', '成本'])
+print(result_df.to_string(index=False))
 ```
 
 ---
@@ -751,15 +908,22 @@ def analyze_table(df, user_question):
 
 **在输出前必须完成以下检查**：
 
-### 全量扫描检查
+### 文件解析检查
+- [ ] 是否检测了多sheet？
+- [ ] 是否提取了所有列的元信息？
+
+### 指标识别检查
 - [ ] 是否遍历了所有列？
-- [ ] 是否分析了指标间关联？
+- [ ] 是否正确区分了指标/维度/排除？
 - [ ] 是否有遗漏的指标？
 
-### 问题聚焦检查
-- [ ] 是否直接回答了用户问题？
-- [ ] 是否做了无关分析？
-- [ ] 关键指标是否识别正确？
+### 企业知识检查
+- [ ] 是否查询了企业知识库？
+- [ ] 是否说明了知识来源？
+
+### 分析体系检查
+- [ ] 是否建立了完整的分析框架？
+- [ ] 分析方法是否与目的匹配？
 
 ### 异动检测检查
 - [ ] 是否执行了三种异动检测？
@@ -789,17 +953,23 @@ def analyze_table(df, user_question):
 | 4 | 计算结论相反 | 方向性检查，逻辑自检 |
 | 5 | 结论无佐证 | 结论-证据绑定，强制要求 |
 | 6 | 计算不全 | 计算完整性检查清单 |
+| 7 | 忽略多sheet | 必须检测多sheet |
+| 8 | 没有分析体系 | 先建立框架再执行 |
+| 9 | 不查企业知识 | 必须查询，说明结果 |
 
 ## Red Flags - 停下来检查
 
 当你有以下想法时，停下来重新审视：
 
-- "这个指标应该不重要" → **必须扫描所有指标，不能跳过**
+- "这个指标应该不重要" → **必须扫描所有列，不能跳过**
+- "Excel应该只有一个sheet" → **必须检测多sheet**
 - "直接算出来就行了" → **必须输出计算过程和公式**
 - "结论很明显" → **必须提供数据证据**
 - "这个异动可能不重要" → **必须报告所有异动，按严重程度排序**
 - "用户应该知道这个指标的含义" → **必须说明指标含义和判断逻辑**
 - "表现好/差很明显" → **必须进行方向性检查**
+- "没有企业知识就算了" → **必须查询，说明查询结果**
+- "不需要建立分析体系" → **必须先建立框架再执行**
 
 ---
 
@@ -843,5 +1013,6 @@ def analyze_table(df, user_question):
 
 | 版本 | 日期 | 变更说明 |
 |-----|------|---------|
+| 0.3.0 | 2026-04-03 | **重构**：新增文件解析（多sheet检测）、指标/维度识别、企业知识查询、建立分析体系环节；明确"遍历列不遍历行"原则；对齐intelligent-data-analysis流程 |
 | 0.2.0 | 2026-04-03 | 新增 Python/pandas 代码示例、透视表示例、统计陷阱警示、优化方向性检查说明 |
 | 0.1.0 | 2026-04-03 | 生产增强版：解决6个生产问题 - 全量扫描、异动检测、问题聚焦、计算校验、结论-证据绑定、完整性检查 |
